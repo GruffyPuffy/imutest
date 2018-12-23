@@ -243,7 +243,6 @@ int main()
         if (accel)
         {
             rs2_vector av = accel.get_motion_data();
-            rs2_vector gv = accel.get_motion_data();
             float R = sqrtf(av.x * av.x + av.y * av.y + av.z * av.z);
 
             float accelX = acos(av.x / R);
