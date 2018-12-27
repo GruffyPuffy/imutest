@@ -154,9 +154,9 @@ int main()
     // Add some features to our viewport
     viewer.addCoordinateSystem(1.0, "axis", 0);
 
-    float thetaX = 0.0;
-    float thetaY = 0.0;
-    float thetaZ = 0.0;
+    float roll = 0.0;
+    float pitch = 0.0;
+    float yaw = 0.0;
 
     GyroBias bias;
 
@@ -213,30 +213,29 @@ int main()
 
             //bias.update(gv.x, gv.y, gv.z);
 
-            double gyroX = gv.x - bias.x;
-            double gyroY = gv.y - bias.y;
-            double gyroZ = gv.z - bias.z;
+            double ratePitch = gv.x - bias.x;
+            double rateYaw = gv.y - bias.y;
+            double rateRoll = gv.z - bias.z;
 
-            gyroX *= dt[RS2_STREAM_GYRO];
-            gyroY *= dt[RS2_STREAM_GYRO];
-            gyroZ *= dt[RS2_STREAM_GYRO];
+            //std::cout << "dt=" << dt[RS2_STREAM_GYRO] << " rateRoll=" << rateRoll * 180.0 / M_PI << " ratePitch=" << ratePitch * 180.0 / M_PI << " rateYaw=" << rateYaw * 180.0 / M_PI << std::endl;
 
-            //std::cout << "dt=" << dt[RS2_STREAM_GYRO] << " gyroX=" << gyroX * 180.0 / M_PI << " gyroY=" << gyroY * 180.0 / M_PI << " gyroZ=" << gyroZ * 180.0 / M_PI << std::endl;
-            //std::cout << " gyroX=" << gyroX * 180.0 / M_PI << " gyroY=" << gyroY * 180.0 / M_PI << " gyroZ=" << gyroZ * 180.0 / M_PI << std::endl;
-            //std::cout << last_ts[RS2_STREAM_GYRO] / 1000.0 << " " << gyroZ * 180.0 / M_PI << std::endl;
+            // Transform to rad from rad/s
+            ratePitch *= dt[RS2_STREAM_GYRO];
+            rateYaw *= dt[RS2_STREAM_GYRO];
+            rateRoll *= dt[RS2_STREAM_GYRO];
 
             // 
             // Get compensation from GYRO
             // 
 
-            // Around "blue", poisitive => right
-            thetaX += gyroZ;
+            // ROLL - Around "blue" (forward), poisitive => right
+            roll += rateRoll;
 
-            // Yaw...don't compensate...
-            thetaY += 0.0;
+            // PITCH - Around "red" (right), positve => right
+            pitch -= ratePitch; 
 
-            // Around "red", positve => right
-            thetaZ -= gyroX; 
+            // YAW - Around "green" (down), positive => right
+            yaw += rateYaw;
 
         }
 
@@ -244,31 +243,28 @@ int main()
         {
             rs2_vector av = accel.get_motion_data();
             float R = sqrtf(av.x * av.x + av.y * av.y + av.z * av.z);
-
-            float accelX = acos(av.x / R);
-            float accelY = acos(av.y / R);
-            float accelZ = acos(av.z / R);
+            float newRoll = acos(av.x / R);
+            float newYaw = acos(av.y / R);
+            float newPitch = acos(av.z / R);
 
             //std::cout << "accelX=" << accelX*180.0/M_PI << " accelY=" << accelY*180.0/M_PI << " accelZ=" << accelZ*180.0/M_PI << std::endl;
 
             if (firstAccel)
             {
                 firstAccel = false;
-                thetaX = accelX;
-                thetaY = accelY;
-                thetaZ = accelZ;
+                roll = newRoll;
+                yaw = newYaw;
+                pitch = newPitch;
             }
             else
             {
                 // Compensate GYRO-drift with ACCEL
-                thetaX = thetaX * 0.98 + accelX * 0.02;
-                thetaY = thetaY * 0.98 + accelY * 0.02;
-                thetaZ = thetaZ * 0.98 + accelZ * 0.02;
+                roll = roll * 0.98 + newRoll * 0.02;
+                yaw = yaw * 0.98 + newYaw * 0.02;
+                pitch = pitch * 0.98 + newPitch * 0.02;
             }
 
-            //std::cout << "thetaX=" << thetaX*180.0/M_PI << " thetaY=" << thetaY*180.0/M_PI << " thetaZ=" << thetaZ*180.0/M_PI << std::endl;
-            //std::cout << last_ts[RS2_STREAM_GYRO] / 1000.0 << " " << thetaX*180.0/M_PI << " " << thetaY*180.0/M_PI << " " << thetaZ*180.0/M_PI << std::endl;
-            //std::cout << last_ts[RS2_STREAM_GYRO] / 1000.0 << " " << thetaX*180.0/M_PI << std::endl;
+            //std::cout << "roll=" << roll*180.0/M_PI << " pitch=" << pitch*180.0/M_PI << " yaw=" << yaw*180.0/M_PI << std::endl;
 
         }
 
@@ -285,9 +281,9 @@ int main()
         sor.filter(*voxel_cloud);
 
         // Transform the cloud according to built in IMU (to get it straight)
-        Eigen::Affine3f rx = Eigen::Affine3f(Eigen::AngleAxisf(-(thetaZ - M_PI_2), Eigen::Vector3f(1, 0, 0)));
+        Eigen::Affine3f rx = Eigen::Affine3f(Eigen::AngleAxisf(-(pitch - M_PI_2), Eigen::Vector3f(1, 0, 0)));
         Eigen::Affine3f ry = Eigen::Affine3f(Eigen::AngleAxisf(0.0, Eigen::Vector3f(0, 1, 0)));
-        Eigen::Affine3f rz = Eigen::Affine3f(Eigen::AngleAxisf(thetaX - M_PI_2, Eigen::Vector3f(0, 0, 1)));
+        Eigen::Affine3f rz = Eigen::Affine3f(Eigen::AngleAxisf(roll - M_PI_2, Eigen::Vector3f(0, 0, 1)));
         Eigen::Affine3f rot = rz * ry * rx;
 
         // Executing the transformation
